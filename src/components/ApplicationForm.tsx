@@ -35,15 +35,20 @@ export function ApplicationForm() {
   const [phase, setPhase] = useState<Phase>("intro");
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<number, AnswerValue>>(emptyAnswers);
+  const [confirmed, setConfirmed] = useState<Record<number, boolean>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const inputsRef = useRef<Record<number, HTMLInputElement | HTMLTextAreaElement | null>>({});
 
   const total = QUESTIONS.length;
-  const question = QUESTIONS[current];
 
-  const hasAnswerAt = useCallback(
+  const hasRawAnswerAt = useCallback(
     (idx: number) => displayAnswer(QUESTIONS[idx], answers[idx]) !== null,
     [answers],
+  );
+
+  const isConfirmedAt = useCallback(
+    (idx: number) => confirmed[idx] === true && hasRawAnswerAt(idx),
+    [confirmed, hasRawAnswerAt],
   );
 
   const isFormPhase = phase === "form" || phase === "review";
@@ -67,18 +72,28 @@ export function ApplicationForm() {
   const goTo = useCallback(
     (idx: number) => {
       setCurrent(idx);
-      if (!hasAnswerAt(idx)) focusCurrent(idx);
+      focusCurrent(idx);
     },
-    [focusCurrent, hasAnswerAt],
+    [focusCurrent],
   );
 
-  const nextSlide = useCallback(() => {
-    if (current < total - 1) {
-      goTo(current + 1);
-    } else {
-      setPhase("review");
+  const advanceFrom = useCallback(
+    (idx: number) => {
+      if (idx < total - 1) {
+        goTo(idx + 1);
+      } else {
+        setPhase("review");
+      }
+    },
+    [goTo, total],
+  );
+
+  const confirmAndAdvance = useCallback(() => {
+    if (hasRawAnswerAt(current)) {
+      setConfirmed((prev) => ({ ...prev, [current]: true }));
     }
-  }, [current, goTo, total]);
+    advanceFrom(current);
+  }, [advanceFrom, current, hasRawAnswerAt]);
 
   const prevSlide = useCallback(() => {
     if (current > 0) goTo(current - 1);
@@ -100,10 +115,13 @@ export function ApplicationForm() {
         });
       } else {
         setAnswers((prev) => ({ ...prev, [idx]: optIdx }));
-        setTimeout(() => nextSlide(), 380);
+        setTimeout(() => {
+          setConfirmed((prev) => ({ ...prev, [idx]: true }));
+          advanceFrom(idx);
+        }, 380);
       }
     },
-    [nextSlide],
+    [advanceFrom],
   );
 
   const editAnswer = useCallback(
@@ -111,6 +129,7 @@ export function ApplicationForm() {
       const q = QUESTIONS[idx];
       const cleared: AnswerValue = q.type === "multi" ? [] : q.type === "single" ? null : "";
       updateAnswer(idx, cleared);
+      setConfirmed((prev) => ({ ...prev, [idx]: false }));
       focusCurrent(idx);
     },
     [focusCurrent, updateAnswer],
@@ -120,9 +139,9 @@ export function ApplicationForm() {
     (idx: number) => {
       editAnswer(idx);
       setPhase("form");
-      goTo(idx);
+      setCurrent(idx);
     },
-    [editAnswer, goTo],
+    [editAnswer],
   );
 
   const submitForm = useCallback(async () => {
@@ -153,22 +172,22 @@ export function ApplicationForm() {
         prevSlide();
         return;
       }
-      if (e.key === "ArrowDown" && hasAnswerAt(current)) {
+      if (e.key === "ArrowDown") {
         e.preventDefault();
-        nextSlide();
+        confirmAndAdvance();
         return;
       }
       const q = QUESTIONS[current];
       if (q.type === "single" || q.type === "multi") {
         const ki = KEYS.indexOf(e.key.toUpperCase());
-        if (ki !== -1 && ki < (q.options?.length ?? 0) && !hasAnswerAt(current)) {
+        if (ki !== -1 && ki < (q.options?.length ?? 0) && !isConfirmedAt(current)) {
           selectChoice(current, ki, q.type === "multi");
         }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [phase, current, hasAnswerAt, nextSlide, prevSlide, selectChoice]);
+  }, [phase, current, isConfirmedAt, confirmAndAdvance, prevSlide, selectChoice]);
 
   const progressPct = useMemo(() => ((current + 1) / total) * 100, [current, total]);
 
@@ -215,9 +234,9 @@ export function ApplicationForm() {
               active={current === idx}
               passed={current > idx}
               value={answers[idx]}
-              answered={hasAnswerAt(idx)}
+              answered={isConfirmedAt(idx)}
               onChangeValue={(v) => updateAnswer(idx, v)}
-              onConfirm={nextSlide}
+              onConfirm={confirmAndAdvance}
               onSelectChoice={selectChoice}
               onEdit={() => editAnswer(idx)}
               registerInput={(el) => {
@@ -236,7 +255,7 @@ export function ApplicationForm() {
           >
             ↑
           </button>
-          <button className="nav-btn" type="button" onClick={nextSlide} title="Próxima">
+          <button className="nav-btn" type="button" onClick={confirmAndAdvance} title="Próxima">
             ↓
           </button>
         </div>
