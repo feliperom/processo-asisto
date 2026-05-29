@@ -196,7 +196,7 @@ export function ApplicationForm() {
       <div className="glow-orb" />
 
       <div id="intro" className={phase !== "intro" ? "hide" : ""}>
-        <p className="intro-badge">Processo Seletivo 2025</p>
+        <p className="intro-badge">Processo Seletivo 2026</p>
         <h1 className="intro-title">ASISTO</h1>
         <p className="intro-sub">
           Perfil Processos &amp; Tecnologia. Queremos entender quem você é — leva menos de 5 minutos.
